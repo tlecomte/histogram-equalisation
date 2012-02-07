@@ -97,8 +97,8 @@ public class HistogramEqualization extends EzPlug
         boolean sampleSignedType = inputSequence.isSignedDataType();
         double[] bounds = inputSequence.getImage(0, 0).getIcyColorModel().getDefaultComponentBounds();
         // length of the histogram equals the number of gray levels
-        int len = (int) (bounds[1] - bounds[0] + 1); 
-        boolean continuous = (len==2)? true : false;
+        int len = (int) (bounds[1] - bounds[0] + 1);
+        boolean continuous = inputSequence.isFloatDataType();
 
         Sequence outputSequence;
     	if (inPlaceSelector.getValue()) {
