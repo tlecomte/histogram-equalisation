@@ -1,5 +1,5 @@
 This is a plugin for Icy (http://icy.bioimageanalysis.org) that equalizes the
-histogram of an image. This operation is also called "histogram flattening").
+histogram of an image. This operation is also called "histogram flattening".
 It operates on the selected channel of each image of a sequence.
 Pixel intensities are transformed so that they are uniformly distributed over
 the gray-scale range.
