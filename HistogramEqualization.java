@@ -56,6 +56,9 @@ public class HistogramEqualization extends EzPlug
 		addEzComponent(channelSelector);
 		addEzComponent(inPlaceSelector);
 		
+		// channel index is larger than zero
+		channelSelector.setMinValue(0);
+		
 		inputSelector.addVarChangeListener(new EzVarListener<Sequence>()
 		{
 			@Override
