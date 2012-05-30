@@ -22,7 +22,13 @@ import java.util.Arrays;
 import java.lang.Double; // for NEGATIVE_INFINITY
 
 import icy.math.MathUtil;
+import plugins.adufour.blocks.lang.Block;
+import plugins.adufour.blocks.util.VarList;
 import plugins.adufour.ezplug.*;
+import plugins.adufour.vars.lang.ConstraintByRange;
+import plugins.adufour.vars.lang.Var;
+import plugins.adufour.vars.lang.VarSequence;
+import plugins.adufour.vars.util.VarListener;
 import icy.sequence.Sequence;
 import icy.type.collection.array.Array1DUtil;
 import icy.gui.dialog.MessageDialog;
@@ -43,11 +49,13 @@ import icy.gui.dialog.MessageDialog;
  * 
  */
 
-public class HistogramEqualization extends EzPlug
+public class HistogramEqualization extends EzPlug implements Block
 {
 	public EzVarSequence inputSelector = new EzVarSequence("Input");
 	public EzVarInteger	channelSelector	= new EzVarInteger("Channel");
 	public EzVarBoolean inPlaceSelector	= new EzVarBoolean("In-place", false);
+	
+	VarSequence outputSequenceVar = new VarSequence("Equalized sequence", null);
 	
 	@Override
 	protected void initialize()
@@ -79,12 +87,28 @@ public class HistogramEqualization extends EzPlug
 		});
 	}
 	
+	// declare ourself to Blocks
+	@Override
+	public void declareInput(VarList inputMap) {
+		inputMap.add(inputSelector.getVariable());
+		inputMap.add(channelSelector.getVariable());
+		inputMap.add(inPlaceSelector.getVariable());
+	}
+
+	// declare ourself to Blocks
+	@Override
+	public void declareOutput(VarList outputMap) {
+		outputMap.add(outputSequenceVar);
+	}
+	
 	@Override
 	protected void execute()
 	{
 		// main plugin code goes here, and runs in a separate thread
 		
-		super.getUI().setProgressBarMessage("Waiting...");
+		if (getUI() != null) {
+			getUI().setProgressBarMessage("Waiting...");
+		}
 		
         Sequence inputSequence = inputSelector.getValue();
         int channel = channelSelector.getValue();
@@ -92,8 +116,23 @@ public class HistogramEqualization extends EzPlug
         // Check if sequence exists.
         if ( inputSequence == null )
         {
-                   MessageDialog.showDialog("Please open a sequence to use this plugin.", MessageDialog.WARNING_MESSAGE );
-                   return;
+        	if (getUI() != null) {
+        		MessageDialog.showDialog("Please open a sequence to use this plugin.", MessageDialog.ERROR_MESSAGE );
+        		return;
+        	} else {
+        		// FIXME find something to do when in Blocks or headless
+        		return;
+        	}
+        }
+        
+        if ((channel > inputSequence.getSizeC() - 1) || (channel < 0)) {
+        	if (getUI() != null) {
+        		MessageDialog.showDialog("Invalid channel.", MessageDialog.ERROR_MESSAGE );
+        		return;
+        	} else {
+        		// FIXME find something to do when in Blocks or headless
+        		return;
+        	}
         }
         
         // data range, is also the histogram size
@@ -225,7 +264,9 @@ public class HistogramEqualization extends EzPlug
 			} // end z
 		} // end t
 
-	    if (!inPlaceSelector.getValue()) {
+		outputSequenceVar.setValue(outputSequence);
+		
+	    if (getUI() != null && !inPlaceSelector.getValue()) {
 			// Add a viewer for the new sequence
 			addSequence(outputSequence);
 		}
