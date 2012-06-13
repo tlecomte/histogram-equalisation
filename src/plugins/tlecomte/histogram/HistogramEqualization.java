@@ -18,7 +18,6 @@
  */
 package plugins.tlecomte.histogram;
 
-import java.util.Arrays;
 import java.lang.Double; // for NEGATIVE_INFINITY
 
 import icy.math.MathUtil;
@@ -99,9 +98,6 @@ public class HistogramEqualization extends EzPlug
         // data range, is also the histogram size
         boolean sampleSignedType = inputSequence.isSignedDataType();
         double[] bounds = inputSequence.getImage(0, 0).getIcyColorModel().getDefaultComponentBounds();
-        // length of the histogram equals the number of gray levels
-        int len = (int) (bounds[1] - bounds[0] + 1);
-        boolean continuous = inputSequence.isFloatDataType();
 
         Sequence outputSequence;
     	if (inPlaceSelector.getValue()) {
@@ -119,109 +115,63 @@ public class HistogramEqualization extends EzPlug
 		        Object inputImageData = inputSequence.getDataXY(t, z, channel);
 		        Object outputImageData = outputSequence.getDataXY(t, z, channel);
 		        
-				// integer data
-				if (!continuous) {
-					// Get a copy of the data in integers.
-					int[] dataBuffer = Array1DUtil.arrayToIntArray(inputImageData, sampleSignedType);
-					int[] outputDataBuffer;
+				// Get a copy of the data as doubles.
+				double[][] dataBuffer = new double[2][];
+				dataBuffer[0] = Array1DUtil.arrayToDoubleArray( inputImageData , sampleSignedType );
+				dataBuffer[1] = Array1DUtil.arrayToDoubleArray( inputImageData , sampleSignedType );
+				double[][] outputDataBuffer = new double[2][];
 
-					if (inPlaceSelector.getValue()) {
-						outputDataBuffer = dataBuffer;
+				// put the pixels indices in dataBuffer second line
+				for (int i = 0; i<dataBuffer[0].length; i++) {
+					dataBuffer[1][i] = i;
+				}
+
+				// sort the pixels by their intensities (while keeping a trace of the
+				// permutation in the second line of outputDataBuffer)
+				outputDataBuffer = mergeSort(dataBuffer);
+
+				// now we will walk the array, computing the cumulative distribution
+				// function, and using it along the way to assign new pixel intensities
+
+				// two doubles for intensity comparisons
+				double previous_intensity = Double.NEGATIVE_INFINITY;
+				double intensity;
+				// (un-normalized) cumulative distribution function
+				int CDF = 0; 
+				// m keeps track of successive pixels with the same intensities
+				int m = 0;
+
+				for (int i = 0; i<outputDataBuffer[0].length; i++) {
+					// save before swapping
+					intensity = outputDataBuffer[0][i];
+
+					// first line of outputDataBuffer will be indices to sort the array back
+					outputDataBuffer[0][i] = outputDataBuffer[1][i];
+
+					// new pixel intensities based on the cumulative distribution function
+					outputDataBuffer[1][i] = CDF;
+					// update the CDF
+					if (intensity > previous_intensity) {
+						// handle the case with several pixels having the same intensity
+						CDF += m;
+						m = 1;
+						previous_intensity = intensity;
 					} else {
-						outputDataBuffer = Array1DUtil.arrayToIntArray(outputImageData, sampleSignedType);
+						m++;
 					}
-
-					float[] HistoData = new float[len];
-					Arrays.fill(HistoData, 0, len - 1, 0f);
-
-					final double absLeftIn = bounds[0];
-
-					int offset;
-					for ( int i = 0 ; i < dataBuffer.length ; i++ )
-					{
-						offset = (int) (dataBuffer[i] - absLeftIn);
-
-						if ((offset >= 0) && (offset < len))
-							HistoData[offset]++;
-					}
-
-					// Normalize the histogram by the number of pixels
-					MathUtil.divide(HistoData, inputSequence.getSizeX()*inputSequence.getSizeY());
-
-					// Compute the cumulative histogram
-					float[] CumulativeHistoData = new float[len];
-					CumulativeHistoData[0] = HistoData[0];
-					for (int i = 1; i<len; i++) {
-						CumulativeHistoData[i] = HistoData[i] + CumulativeHistoData[i-1];
-					}
-
-					// Transform every pixel       
-					for ( int i = 0 ; i < dataBuffer.length ; i++ )
-					{
-						outputDataBuffer[i] = (int) (CumulativeHistoData[dataBuffer[i]] * (len-1));
-					}
-
-					// Put the data in the output image.
-					Array1DUtil.intArrayToArray( outputDataBuffer, outputImageData, sampleSignedType );
 				}
-				else
-				{ // continuous case
 
-					// Get a copy of the data as doubles.
-					double[][] dataBuffer = new double[2][];
-					dataBuffer[0] = Array1DUtil.arrayToDoubleArray( inputImageData , sampleSignedType );
-					dataBuffer[1] = Array1DUtil.arrayToDoubleArray( inputImageData , sampleSignedType );
-					double[][] outputDataBuffer = new double[2][];
+				// sort the array back in its original order
+				outputDataBuffer = mergeSort(outputDataBuffer);
 
-					// put the pixels indices in dataBuffer second line
-					for (int i = 0; i<dataBuffer[0].length; i++) {
-						dataBuffer[1][i] = i;
-					}
+				// Normalize the data to [0,1]
+				MathUtil.divide(outputDataBuffer[1], inputSequence.getSizeX()*inputSequence.getSizeY());
+				
+				// Scale to match the upper bound of the original type
+				MathUtil.mul(outputDataBuffer[1], bounds[1]);
 
-					// sort the pixels by their intensities (while keeping a trace of the
-					// permutation in the second line of outputDataBuffer)
-					outputDataBuffer = mergeSort(dataBuffer);
-
-					// now we will walk the array, computing the cumulative distribution
-					// function, and using it along the way to assign new pixel intensities
-
-					// two doubles for intensity comparisons
-					double previous_intensity = Double.NEGATIVE_INFINITY;
-					double intensity;
-					// (un-normalized) cumulative distribution function
-					int CDF = 0; 
-					// m keeps track of successive pixels with the same intensities
-					int m = 0;
-
-					for (int i = 0; i<outputDataBuffer[0].length; i++) {
-						// save before swapping
-						intensity = outputDataBuffer[0][i];
-
-						// first line of outputDataBuffer will be indices to sort the array back
-						outputDataBuffer[0][i] = outputDataBuffer[1][i];
-
-						// new pixel intensities based on the cumulative distribution function
-						outputDataBuffer[1][i] = CDF;
-						// update the CDF
-						if (intensity > previous_intensity) {
-							// handle the case with several pixels having the same intensity
-							CDF += m;
-							m = 1;
-							previous_intensity = intensity;
-						} else {
-							m++;
-						}
-					}
-
-					// sort the array back in its original order
-					outputDataBuffer = mergeSort(outputDataBuffer);
-
-					// Normalize the data to [0,1]
-					MathUtil.divide(outputDataBuffer[1], inputSequence.getSizeX()*inputSequence.getSizeY());
-
-					// Put the data in the output image.
-					Array1DUtil.doubleArrayToArray( outputDataBuffer[1], outputImageData);
-				}
+				// Put the data in the output image.
+				Array1DUtil.doubleArrayToArray( outputDataBuffer[1], outputImageData);
 			} // end z
 		} // end t
 
